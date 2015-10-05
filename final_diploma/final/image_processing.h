@@ -1,10 +1,10 @@
-//--->ОБРАБОТКА ИЗОБРАЖЕНИЙ ПО АЛГОРИТМУ
+//--->IMAGE PROCESSING VIA THE MAIN ALGORITHM (detection and descriptors)
 
 //TODO:
-//очистка памяти (списка дескрипторов, самих дескрипторов) после каждого прохода основного цикла
-/* динамический массив протаскивается из CalcHaarResponse до самого верха  */
-/* изменить константу для размера дескриптора на переменную  */
 //проверка макс значения в функции Calc_Image_Sum()
+//correct Gauss_kernel_size 3,5,...
+//drawKeypointsList() return values documentation
+//correct Calc_Haar_Response to work with descriptors of different length
 
 #ifndef IMG_PROC
 #define IMG_PROC
@@ -16,7 +16,6 @@
 #include <opencv2\core\core.hpp>
 #include <opencv2\highgui\highgui.hpp>
 #include <opencv2\imgproc\imgproc.hpp>
-//#include <opencv2\features2d\features2d.hpp>
 
 #define ERROR_150_V "ERROR 150: Keypoint * list is empty"
 #define ERROR_151_V "ERROR 151: Keypoint * list has either zero or one point at (0,0)"
@@ -27,9 +26,10 @@
 using namespace std;
 using namespace cv;
 
+//User Keypoint structure for generating lists, not regular cv::KeyPoint
 #ifndef STRUCT_KEYPOINT
 #define STRUCT_KEYPOINT
-struct Keypoint //user keypoint, not regular cv::KeyPoint
+struct Keypoint 
 {
 	Point center;
 	int radius;
@@ -38,77 +38,88 @@ struct Keypoint //user keypoint, not regular cv::KeyPoint
 } ;
 #endif
 
-/*  Основная функция обработки изображения
-	- фильтрация шума
-	- поиск о.т.
-	- расчет дескрипторов
-Возвращает указатель на список о.т. с рассчитанными дескрипторами
+/*
+Main image processing function provides
+	- filtering
+	- detection of Keypoints
+	- description of keypoints
+--------------------------------------------
+Returns the pointer to the list of Keypoints 
+or NULL, if zero keypoints were detected
+--------------------------------------------
+IS CALLED BY: main_process();               //see main_process.cpp
+CALLS: drawKeypointsList(); list_points()   //see current
 */
 Keypoint * imgproc_main(         
-	Mat src,                     //вход (неизменяемый)
-	Mat dst,                     //выход (для отображения)
-	int FAST_thresh = 50,        //параметр FAST
-	string winname = "imgproc",  //имя окна вывода
-	int gauss_ksize = 0,         //размер ядра гауссова фильтра (0, 3, 4,..k>0), 0 = не использ.
-	int med_ksize = 0,           //размер ядра медианного фильтра (0, 3, 4,..k>0), 0 = не использ.
-	bool verbose = false         //доп. инф.
-	);
-
-/*  
-Функция отрисовки найденных точек для структуры Keypoint 
-(аналог CV::drawKeypoints)
-работает с пустыми изображениями,
-возвращает коды ошибок см. выше
-*/
-int drawKeypointsList(
-	Mat src,                      //вход (м.б. пустым, но нежелательно)
-	Keypoint * points,            //список точек
-	Mat dst,                      //выход (в общем случае совпадает со входом)
-	int radius = 1,               //радиус окрестности точки > 0
-	Scalar color = Scalar::all(255),//цвет отрисовки
-	int flags = 1,                //два флага 0 и 1, см. выше
-	int thickness = 1,            //толщина линии, -1 = закрасить
-	bool verbose = false          //флаг доп. инф.
-	);
-
-/*  
-Цикл по всем точкам, найденным детектором, 
-расстояние от которых до границы изображения не превышает radius.
-Такие точки записываются в связный список (память выделяется внутри функции), 
-и для них считаются дескрипторы.
-Если точки не были найдены, то возвр. NULL, иначе указатель на начало списка
-**вызывается из функции imgproc_main
-***вызывает функцию list_points
-*/
-Keypoint * list_points(     
-	Mat src,                     //вход (неизменяемый)
-	vector <KeyPoint> points,    //точки, найденные детектором (FAST)
-	bool verbose = false,        //доп. инф.
-	int radius = 12,             //максимальный радиус максимальной окрестности о.т.
-	int desc_size = 3,           //(???) число различных окрестностей (???)
-	int desc_step = 4            //(???) шаг увеличения размера окрестности (???)
+	Mat src,                     //in buffer (unchanged)
+	Mat dst,                     //out buffer
+	int FAST_thresh = 50,        //FAST threshold value
+	string winname = "imgproc",  //window name (for display)
+	int gauss_ksize = 0,         //Gauss filter Kernel Size, can be 0 (don't use) or >3
+	int med_ksize = 0,           //Median filter Kernel Size, can be 0 (don't use) or >3
+	bool verbose = false         
 	);
 
 /*
-Расчет дескриптора для заданной точки
-**вызывается из функции list_points
-***вызывает функцию Calc_Descriptor
- - Выполняется выделение памяти для массива указателей 
-типа double размерности size.
- - Выполняется вызов функции для расчета каждого вектора отклика
- - Выполняется усреднение и нормировка для дескриптора
- - освобождается память size-1
-Возвращается указатель на динамический массив double,
-!NULL возвращаться не должен!
+Draws Keypoints on given image or on empty area,
+size of the area is calculated via the function
+-----------------------------------------------
+returns 0 on success or ERROR_CODE (see above)
+-----------------------------------------------
+IS CALLED BY: imgproc_main()            //see current
+*/
+int drawKeypointsList(
+	Mat src,                      //in buffer (can be empty)
+	Keypoint * points,            //List of points to draw
+	Mat dst,                      //out buffer (most always it will be the same as src)
+	int radius = 1,               //radius of point for cv::Circle()
+	Scalar color = Scalar::all(255),//color of point for cv::Circle()
+	int flags = DRAW_ON_OUTIMAGE, //flags 0 or 1, see above
+	int thickness = 1,            //line thickness for cv::Circle(), -1 = fill
+	bool verbose = false
+	);
+
+
+/*
+Cycles thru all points, found by detector, which are on distance 'radius'
+from borders of the image, points are added to the list (memory is allocated in heap)
+for any of these points calculates descriptor vector
+------------------------------------------------------------------------
+returns pointer to the list of Keypoints or NULL, if 0 points were found
+------------------------------------------------------------------------
+IS CALLED BY: imgproc_main();                //see current
+CALLS: Calc_Descriptor();                    //see current
+*/
+Keypoint * list_points(     
+	Mat src,                     //in buffer (unchanged)
+	vector <KeyPoint> points,    //points found by detector
+	bool verbose = false,        
+	int radius = 12,             //max radius of max neighborhood (>= desc_step * desc_size)
+	int desc_size = 3,           //amount of different neighborhoods
+	int desc_step = 4            //step size to increase radius
+	);
+
+/*
+Calculates descriptor for a given point,
+allocates memory in heap: new double *[size]
+for 'size' amount of descriptors, 
+then deletes 'size-1' of them
+--------------------------------------------------
+returns pointer to descriptor, 
+cannot be NULL
+--------------------------------------------------
+IS CALLED BY: list_points();         //see current
+CALLS: Calc_Haar_Response();         //see current
 */
 
 double * Calc_Descriptor(
-	Mat src,                    //вход (неизменяемый)
-	Point center,               //центр окрестности
-	int desc_size = 3,          //число различных окрестностей
-	int desc_step = 4,          //шаг увеличения размера окрестности
-	bool verbose = false        //флаг доп.инф.
+	Mat src,                    //in buffer (unchanged)
+	Point center,               //center of the neighborhood
+	int desc_size = 3,          //amount of different neighborhoods
+	int desc_step = 4,          //step size to increase radius
+	bool verbose = false        
 	);
+
 /*
 Расчет вектора откликов для формирования дескриптора
 **вызывается из функции Calc_Descriptor
@@ -117,23 +128,38 @@ double * Calc_Descriptor(
 !NULL возвращаться не должен!
 Выделяет динамически память на массив откликов
 */
-
+/*
+Calculates response to primitive (Haar or non-Haar);
+allocates memory in heap for the descriptor of length = 8								<----CORRECT
+----------------------------------------------------------
+returns a pointer to the array of responses, 
+cannot be NULL
+-----------------------------------------------------------
+IS CALLED BY: Calc_Descriptor()                //see current
+CALLS: Calc_Image_Sum()                        //see current
+*/
 double * Calc_Haar_Response(
-	Mat src,                    //вход (неизменяемый)
-	Point center,               //центр окрестности
-	int radius = 8,             //радиус окрестности
-	bool verbose = false        //флаг доп.инф.
+	Mat src,                    //in buffer
+	Point center,               //center of the neighborhood
+	int radius = 8,             //radius of the neighborhood
+	bool verbose = false
 	);
 
 /*
-Считает сумму яркостей пикселей изображения src
-и сохраняет эту сумму в int
-! Аккуратно с int ! возможно переполнение
+Calculates the sum of the pixels of the image src
+-------------------------------------------------
+returns this sum
+-------------------------------------------------
+IS CALLED BY: Calc_Image_Sum()                //see current
 */
-int Calc_Image_Sum (Mat src, bool verbose = false);
+int Calc_Image_Sum (
+	Mat src,                    //in buffer
+	bool verbose = false        
+	);
 
 /*
-Очистка памяти
+Clears the list of keypoints
+iS CALLED BY: imgproc_main()                  //see imgproc_main.cpp
 */
 void clear_keypoints(Keypoint *img_pts);
 

@@ -129,8 +129,6 @@ int main_process(
 		//clear_keypoints(matches);
 		clear_keypoints(img_pts);
 
-		assert(img_pts == NULL);
-
 
 		/*  ќтображение измененного кадра-изображени€  */
 

@@ -37,9 +37,6 @@ Keypoint * matches_BF_simple(
 
 				matches = new Keypoint;
 
-				//temporary
-				assert(jt->center.x >= 0 && jt->center.y >= 0);
-
 				matches->center = jt->center;
 				matches->radius = jt->radius;
 				matches->descriptor = new double [desc_size];
